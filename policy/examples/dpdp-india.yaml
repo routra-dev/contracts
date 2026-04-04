@@ -1,0 +1,7 @@
+version: "1"
+
+policies:
+  dpdp-india:
+    strategy: cheapest
+    regions: [in-west, in-central]
+    fallback: true

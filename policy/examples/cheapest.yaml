@@ -1,0 +1,6 @@
+version: "1"
+
+policies:
+  default:
+    strategy: cheapest
+    fallback: true

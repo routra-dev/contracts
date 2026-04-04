@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://routra.dev/policy/schema.json",
+  "title": "Routra Policy File",
+  "description": "Schema for routra.yaml routing policy files",
+  "type": "object",
+  "required": ["version", "policies"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["1"],
+      "description": "Policy file schema version"
+    },
+    "policies": {
+      "type": "object",
+      "description": "Named routing policies. The 'default' key is used when no X-Routra-Policy header is provided.",
+      "additionalProperties": {
+        "$ref": "#/$defs/Policy"
+      },
+      "minProperties": 1
+    }
+  },
+  "$defs": {
+    "Policy": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["cheapest", "balanced", "fastest"],
+          "default": "cheapest",
+          "description": "Routing optimization strategy"
+        },
+        "providers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Restrict routing to these provider slugs",
+          "examples": [["groq", "together", "spheron"]]
+        },
+        "regions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Restrict to providers in these regions (compliance/GDPR/DPDP)",
+          "examples": [["eu-west", "eu-central"], ["in-west", "in-central"]]
+        },
+        "min_uptime_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Minimum 90-day uptime percentage required"
+        },
+        "max_latency_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum acceptable provider P50 latency in milliseconds"
+        },
+        "max_cost_per_1m": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum cost per 1M tokens in USD"
+        },
+        "spend_cap": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Monthly spend cap in USD. Returns 429 when reached."
+        },
+        "fallback": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic failover to next-best provider on error"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["sync", "async"],
+          "default": "sync",
+          "description": "sync = streaming/buffered response; async = batch job"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

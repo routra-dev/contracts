@@ -1,0 +1,8 @@
+version: "1"
+
+policies:
+  batch:
+    strategy: cheapest
+    mode: async
+    max_cost_per_1m: 0.10
+    fallback: true

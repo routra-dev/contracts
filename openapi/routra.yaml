@@ -1,0 +1,455 @@
+openapi: "3.1.0"
+info:
+  title: Routra API
+  version: "0.1.0"
+  description: |
+    One API. Every GPU Cloud.
+
+    Routra is an OpenAI-compatible routing layer. Point any OpenAI SDK at
+    https://api.routra.dev/v1 and set your api_key to a rtr-... key.
+
+    ## Policy routing
+    Pass X-Routra-Policy: <policy-name> header to select a routing policy.
+
+    ## Response metadata
+    Every response includes a `routra` field with provider, cost, and latency details.
+  contact:
+    url: https://routra.dev
+
+servers:
+  - url: https://api.routra.dev/v1
+    description: Production
+
+security:
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Bearer rtr-<prefix>-<secret>"
+
+  schemas:
+    RoutingMetadata:
+      type: object
+      properties:
+        provider:
+          type: string
+          example: spheron
+        latency_ms:
+          type: integer
+          example: 245
+        ttfb_ms:
+          type: integer
+          nullable: true
+        cost_usd:
+          type: number
+          format: double
+          example: 0.0089
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+        score_selected:
+          type: number
+          format: double
+        failover:
+          type: boolean
+          default: false
+
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        prefix:
+          type: string
+          example: rtr-a1b2c3d4
+        name:
+          type: string
+          nullable: true
+        policy_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        policy_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+
+    CreateApiKeyResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiKey'
+        - type: object
+          properties:
+            key:
+              type: string
+              description: Full API key — shown once only. Store it securely.
+              example: rtr-a1b2c3d4-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        strategy:
+          type: string
+          enum: [cheapest, balanced, fastest]
+        constraints:
+          $ref: '#/components/schemas/PolicyConstraints'
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    PolicyConstraints:
+      type: object
+      properties:
+        allowed_providers:
+          type: array
+          items:
+            type: string
+          example: [groq, together]
+        allowed_regions:
+          type: array
+          items:
+            type: string
+          example: [eu-west, eu-central]
+        min_uptime_pct:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+        max_latency_ms:
+          type: integer
+          minimum: 0
+        max_cost_per_1m_tokens:
+          type: number
+          format: double
+        spend_cap_per_month_usd:
+          type: number
+          format: double
+        batch_mode:
+          type: boolean
+          default: false
+
+    BatchJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, running, complete, failed]
+        request_count:
+          type: integer
+        completed_count:
+          type: integer
+        cost_usd:
+          type: number
+          format: double
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: no_provider_available
+            message:
+              type: string
+
+paths:
+  # ── Proxy (OpenAI-compatible) ────────────────────────────────────────────────
+  /chat/completions:
+    post:
+      operationId: createChatCompletion
+      summary: Create a chat completion
+      description: |
+        OpenAI-compatible chat completion endpoint.
+        Pass X-Routra-Policy header to control routing.
+      tags: [proxy]
+      parameters:
+        - name: X-Routra-Policy
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Name of routing policy to apply
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: OpenAI ChatCompletionRequest — use "auto" for model to let Routra choose.
+      responses:
+        "200":
+          description: Chat completion response with routra metadata field
+          content:
+            application/json:
+              schema:
+                type: object
+                description: OpenAI ChatCompletion response with extra `routra` field
+                properties:
+                  routra:
+                    $ref: '#/components/schemas/RoutingMetadata'
+        "429":
+          description: Rate limit or spend cap exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "503":
+          description: No provider available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /models:
+    get:
+      operationId: listModels
+      summary: List available models
+      tags: [proxy]
+      responses:
+        "200":
+          description: OpenAI-compatible model list
+
+  # ── Keys ─────────────────────────────────────────────────────────────────────
+  /keys:
+    get:
+      operationId: listApiKeys
+      summary: List API keys
+      tags: [keys]
+      responses:
+        "200":
+          description: List of API keys (prefix and metadata only — never the full key)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKey'
+    post:
+      operationId: createApiKey
+      summary: Create an API key
+      description: Returns the full key once — store it immediately.
+      tags: [keys]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        "201":
+          description: Created key with full secret (shown once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+
+  /keys/{id}:
+    delete:
+      operationId: revokeApiKey
+      summary: Revoke an API key
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Key revoked
+
+  /keys/{id}/rotate:
+    post:
+      operationId: rotateApiKey
+      summary: Rotate an API key
+      description: Issues a new key. Old key remains active for 24 hours.
+      tags: [keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "201":
+          description: New key (shown once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+
+  # ── Policies ─────────────────────────────────────────────────────────────────
+  /policies:
+    post:
+      operationId: createOrUpdatePolicy
+      summary: Create or update a routing policy
+      tags: [policies]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Policy'
+      responses:
+        "200":
+          description: Policy created or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+
+  # ── Usage ─────────────────────────────────────────────────────────────────────
+  /usage:
+    get:
+      operationId: getUsage
+      summary: Get usage and cost summary
+      tags: [usage]
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+        - name: group_by
+          in: query
+          schema:
+            type: string
+            enum: [provider, model, key]
+      responses:
+        "200":
+          description: Usage summary
+
+  # ── Batch ─────────────────────────────────────────────────────────────────────
+  /batch:
+    post:
+      operationId: createBatchJob
+      summary: Create an async batch inference job
+      description: |
+        Submit a JSONL file of requests. Results delivered to Supabase Storage
+        and available via a signed URL. 50-60% cheaper than synchronous requests.
+      tags: [batch]
+      responses:
+        "202":
+          description: Batch job accepted
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL to poll for status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJob'
+
+  /batch/{id}/status:
+    get:
+      operationId: getBatchStatus
+      summary: Get batch job status
+      tags: [batch]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Batch job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJob'
+
+  /batch/{id}/results:
+    get:
+      operationId: getBatchResults
+      summary: Get batch results download URL
+      tags: [batch]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Signed URL to download results JSONL (1 hour TTL)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                  expires_at:
+                    type: string
+                    format: date-time
+
+  # ── Health ────────────────────────────────────────────────────────────────────
+  /healthz:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      tags: [system]
+      security: []
+      responses:
+        "200":
+          description: Service is healthy

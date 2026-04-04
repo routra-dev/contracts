@@ -1,0 +1,13 @@
+version: "1"
+
+policies:
+  production:
+    strategy: balanced
+    providers: [coreweave, lambda, nebius]
+    min_uptime_pct: 99.5
+    max_latency_ms: 2000
+    fallback: true
+
+  default:
+    strategy: cheapest
+    fallback: true
