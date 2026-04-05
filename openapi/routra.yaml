@@ -1,455 +1,977 @@
-openapi: "3.1.0"
+openapi: 3.1.0
 info:
   title: Routra API
-  version: "0.1.0"
-  description: |
-    One API. Every GPU Cloud.
-
-    Routra is an OpenAI-compatible routing layer. Point any OpenAI SDK at
-    https://api.routra.dev/v1 and set your api_key to a rtr-... key.
-
-    ## Policy routing
-    Pass X-Routra-Policy: <policy-name> header to select a routing policy.
-
-    ## Response metadata
-    Every response includes a `routra` field with provider, cost, and latency details.
+  description: One API key. Every AI provider.
   contact:
+    name: Routra
     url: https://routra.dev
-
-servers:
-  - url: https://api.routra.dev/v1
-    description: Production
-
-security:
-  - ApiKeyAuth: []
-
-components:
-  securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: Authorization
-      description: "Bearer rtr-<prefix>-<secret>"
-
-  schemas:
-    RoutingMetadata:
-      type: object
-      properties:
-        provider:
+  license:
+    name: ''
+  version: 0.1.0
+paths:
+  /healthz:
+    get:
+      tags:
+      - health
+      summary: Health check
+      operationId: healthz
+      responses:
+        '200':
+          description: Service is healthy
+  /v1/audit-log:
+    get:
+      tags:
+      - audit
+      summary: List audit log entries
+      operationId: list_audit_log
+      parameters:
+      - name: limit
+        in: query
+        description: Maximum number of results (default 50, max 200).
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      - name: offset
+        in: query
+        description: Pagination offset.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogEntry'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/batch:
+    get:
+      tags:
+      - batch
+      summary: List batch jobs for the workspace
+      operationId: list_batch_jobs
+      responses:
+        '200':
+          description: List of batch jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BatchJobResponse'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+    post:
+      tags:
+      - batch
+      summary: Create an async batch inference job
+      description: Submit up to 50,000 requests. 50-60% cheaper than synchronous. Results available via presigned R2 URL.
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBatchRequest'
+        required: true
+      responses:
+        '202':
+          description: Batch job accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJobResponse'
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/batch/{id}/results:
+    get:
+      tags:
+      - batch
+      summary: Get batch job results URL
+      description: Returns a presigned R2 URL when the job is complete. Poll status first.
+      operationId: results
+      parameters:
+      - name: id
+        in: path
+        description: Batch job ID
+        required: true
+        schema:
           type: string
-          example: spheron
-        latency_ms:
-          type: integer
-          example: 245
-        ttfb_ms:
-          type: integer
-          nullable: true
-        cost_usd:
-          type: number
-          format: double
-          example: 0.0089
-        input_tokens:
-          type: integer
-        output_tokens:
-          type: integer
-        score_selected:
-          type: number
-          format: double
-        failover:
-          type: boolean
-          default: false
-
-    ApiKey:
+          format: uuid
+      responses:
+        '200':
+          description: Results URL or current status
+        '404':
+          description: Job not found
+      security:
+      - ApiKeyAuth: []
+  /v1/batch/{id}/status:
+    get:
+      tags:
+      - batch
+      summary: Get batch job status
+      operationId: status
+      parameters:
+      - name: id
+        in: path
+        description: Batch job ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Batch job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJobResponse'
+        '404':
+          description: Job not found
+      security:
+      - ApiKeyAuth: []
+  /v1/billing:
+    get:
+      tags:
+      - billing
+      summary: Get billing information for the authenticated workspace
+      operationId: get_billing
+      responses:
+        '200':
+          description: Billing info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingInfo'
+        '404':
+          description: Workspace not found
+      security:
+      - ApiKeyAuth: []
+  /v1/billing/checkout:
+    post:
+      tags:
+      - billing
+      summary: Create a Dodo Payments checkout session for a plan upgrade
+      operationId: create_checkout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutRequest'
+        required: true
+      responses:
+        '200':
+          description: Checkout URL to redirect the user to
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCheckoutResponse'
+        '400':
+          description: Invalid request
+        '503':
+          description: Payment adapter not configured
+      security:
+      - ApiKeyAuth: []
+  /v1/billing/free-credit:
+    post:
+      tags:
+      - billing
+      summary: Grant the one-time $5 free credit to a Starter workspace (idempotent)
+      operationId: grant_free_credit
+      responses:
+        '200':
+          description: Credit grant result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeCreditResponse'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/billing/subscription:
+    delete:
+      tags:
+      - billing
+      summary: Cancel the active subscription
+      operationId: cancel_subscription
+      responses:
+        '204':
+          description: Subscription cancellation initiated
+        '404':
+          description: No active subscription
+        '503':
+          description: Payment adapter not configured
+      security:
+      - ApiKeyAuth: []
+  /v1/billing/topup:
+    post:
+      tags:
+      - billing
+      summary: Create a one-time Dodo Payments checkout session to top up credit balance
+      operationId: topup_credit
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopupRequest'
+        required: true
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCheckoutResponse'
+        '400':
+          description: Invalid amount or URL
+        '503':
+          description: Payment adapter not configured
+      security:
+      - ApiKeyAuth: []
+  /v1/chat/completions:
+    post:
+      tags:
+      - proxy
+      summary: Chat completions (proxied)
+      operationId: chat_completions
+      requestBody:
+        description: OpenAI-compatible chat completions body
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '200':
+          description: Provider response (streaming or full)
+        '400':
+          description: Bad request
+        '503':
+          description: No providers available
+      security:
+      - ApiKeyAuth: []
+  /v1/embeddings:
+    post:
+      tags:
+      - proxy
+      summary: Embeddings (proxied)
+      operationId: embeddings
+      requestBody:
+        description: OpenAI-compatible embeddings body
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '200':
+          description: Provider response
+        '503':
+          description: No providers available
+      security:
+      - ApiKeyAuth: []
+  /v1/keys:
+    get:
+      tags:
+      - keys
+      summary: List API keys
+      description: Returns prefix and metadata only — never the full key.
+      operationId: list_keys
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KeySummary'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+    post:
+      tags:
+      - keys
+      summary: Create an API key
+      description: Returns the full key exactly once — store it immediately.
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateKeyRequest'
+        required: true
+      responses:
+        '200':
+          description: Created key with full secret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateKeyResponse'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/keys/{id}:
+    delete:
+      tags:
+      - keys
+      summary: Revoke an API key
+      operationId: revoke
+      parameters:
+      - name: id
+        in: path
+        description: Key ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Key revoked
+        '404':
+          description: Key not found
+      security:
+      - ApiKeyAuth: []
+  /v1/keys/{id}/rotate:
+    post:
+      tags:
+      - keys
+      summary: Rotate an API key
+      description: Issues a new key. Old key remains active for 24 hours.
+      operationId: rotate
+      parameters:
+      - name: id
+        in: path
+        description: Key ID to rotate
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: New key (shown once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateKeyResponse'
+        '404':
+          description: Key not found
+      security:
+      - ApiKeyAuth: []
+  /v1/models:
+    get:
+      tags:
+      - proxy
+      summary: List available models
+      operationId: list_models
+      responses:
+        '200':
+          description: List of available models (OpenAI-compatible format)
+      security:
+      - ApiKeyAuth: []
+  /v1/policies:
+    get:
+      tags:
+      - policies
+      summary: List routing policies
+      operationId: list_policies
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyResponse'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+    post:
+      tags:
+      - policies
+      summary: Create or update a routing policy
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePolicyRequest'
+        required: true
+      responses:
+        '200':
+          description: Policy created or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/requests:
+    get:
+      tags:
+      - usage
+      summary: List recent routing events (request log)
+      operationId: list_requests
+      parameters:
+      - name: limit
+        in: query
+        description: Maximum number of results (default 50, max 200).
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      - name: offset
+        in: query
+        description: Pagination offset.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      responses:
+        '200':
+          description: Request log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RequestLogEntry'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/usage:
+    get:
+      tags:
+      - usage
+      summary: Get usage and cost summary for the current billing period
+      operationId: get
+      responses:
+        '200':
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageSummary'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/usage/cost-breakdown:
+    get:
+      tags:
+      - usage
+      summary: Cost breakdown by model and provider for the current billing period
+      operationId: cost_breakdown
+      responses:
+        '200':
+          description: Cost breakdown items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CostBreakdownItem'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/webhooks:
+    get:
+      tags:
+      - webhooks
+      summary: List webhook endpoints
+      operationId: list_endpoints
+      responses:
+        '200':
+          description: List of webhook endpoints
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookEndpointResponse'
+      security:
+      - ApiKeyAuth: []
+    post:
+      tags:
+      - webhooks
+      summary: Create webhook endpoint
+      operationId: create_endpoint
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+        required: true
+      responses:
+        '201':
+          description: Webhook endpoint created (includes secret shown once)
+        '400':
+          description: Invalid URL or event type
+      security:
+      - ApiKeyAuth: []
+  /v1/webhooks/{id}:
+    delete:
+      tags:
+      - webhooks
+      summary: Delete webhook endpoint
+      operationId: delete_endpoint
+      parameters:
+      - name: id
+        in: path
+        description: Webhook endpoint ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Not found
+      security:
+      - ApiKeyAuth: []
+components:
+  schemas:
+    AuditLogEntry:
       type: object
+      required:
+      - id
+      - action
+      - resource_type
+      - created_at
       properties:
+        action:
+          type: string
+        actor_id:
+          type:
+          - string
+          - 'null'
+        created_at:
+          type: string
+        id:
+          type: string
+        metadata: {}
+        resource_id:
+          type:
+          - string
+          - 'null'
+        resource_type:
+          type: string
+    BatchJobResponse:
+      type: object
+      required:
+      - id
+      - status
+      - request_count
+      - completed_count
+      - created_at
+      properties:
+        completed_at:
+          type:
+          - string
+          - 'null'
+        completed_count:
+          type: integer
+          format: int32
+        cost_usd:
+          type:
+          - number
+          - 'null'
+          format: double
+        created_at:
+          type: string
         id:
           type: string
           format: uuid
-        workspace_id:
+        request_count:
+          type: integer
+          format: int32
+        status:
           type: string
+          description: 'Job status: queued, running, complete, or failed.'
+    BatchRequestItem:
+      type: object
+      description: A batch request item — mirrors OpenAI's batch API format.
+      required:
+      - custom_id
+      - method
+      - url
+      - body
+      properties:
+        body: {}
+        custom_id:
+          type: string
+        method:
+          type: string
+        url:
+          type: string
+    BillingInfo:
+      type: object
+      required:
+      - billing_tier
+      - subscription_status
+      - spend_month_usd
+      - credit_balance_usd
+      - free_credit_granted
+      properties:
+        billing_tier:
+          type: string
+        credit_balance_usd:
+          type: number
+          format: double
+          description: Current prepaid credit balance (USD). Relevant for Starter/free workspaces.
+        free_credit_granted:
+          type: boolean
+          description: Whether the one-time $5 free credit has been issued to this workspace.
+        spend_month_usd:
+          type: number
+          format: double
+        subscription_id:
+          type:
+          - string
+          - 'null'
+          description: Active subscription ID (provider-agnostic name for public API).
+        subscription_status:
+          type: string
+    CostBreakdownItem:
+      type: object
+      required:
+      - model
+      - provider
+      - total_cost_usd
+      - request_count
+      properties:
+        model:
+          type: string
+        provider:
+          type: string
+        request_count:
+          type: integer
+          format: int64
+        total_cost_usd:
+          type: number
+          format: double
+    CreateBatchRequest:
+      type: object
+      required:
+      - requests
+      properties:
+        completion_window:
+          type: string
+          example: 24h
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchRequestItem'
+          description: Array of request items (max 50,000).
+    CreateCheckoutRequest:
+      type: object
+      required:
+      - product_id
+      - customer_email
+      - success_url
+      properties:
+        customer_email:
+          type: string
+        product_id:
+          type: string
+        success_url:
+          type: string
+    CreateCheckoutResponse:
+      type: object
+      required:
+      - checkout_url
+      properties:
+        checkout_url:
+          type: string
+    CreateKeyRequest:
+      type: object
+      properties:
+        name:
+          type:
+          - string
+          - 'null'
+          description: Human-readable label for this key.
+        policy_name:
+          type:
+          - string
+          - 'null'
+          description: Attach a routing policy by name.
+    CreateKeyResponse:
+      type: object
+      required:
+      - id
+      - prefix
+      - key
+      - created_at
+      properties:
+        created_at:
+          type: string
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          description: Full key — shown exactly once, never stored in plain text.
+        name:
+          type:
+          - string
+          - 'null'
+        prefix:
+          type: string
+    CreatePolicyRequest:
+      type: object
+      required:
+      - name
+      properties:
+        constraints:
+          description: Constraint map (allowed_providers, allowed_regions, etc.).
+        name:
+          type: string
+          description: Unique policy name within the workspace.
+        strategy:
+          type: string
+          description: 'Routing strategy: cheapest, balanced, or fastest.'
+          example: cheapest
+    CreateWebhookRequest:
+      type: object
+      required:
+      - url
+      - events
+      properties:
+        events:
+          type: array
+          items:
+            type: string
+          description: |-
+            Event types to subscribe to. Valid values:
+              "key.expiring", "batch.completed", "spend.cap_approaching"
+        url:
+          type: string
+          description: HTTPS URL to deliver webhook events to.
+    FreeCreditResponse:
+      type: object
+      required:
+      - granted
+      - credit_balance_usd
+      properties:
+        credit_balance_usd:
+          type: number
+          format: double
+        granted:
+          type: boolean
+    KeySummary:
+      type: object
+      required:
+      - id
+      - prefix
+      - is_active
+      - created_at
+      properties:
+        created_at:
+          type: string
+        id:
+          type: string
+          format: uuid
+        is_active:
+          type: boolean
+        last_used_at:
+          type:
+          - string
+          - 'null'
+        name:
+          type:
+          - string
+          - 'null'
+        policy_id:
+          type:
+          - string
+          - 'null'
           format: uuid
         prefix:
           type: string
-          example: rtr-a1b2c3d4
-        name:
-          type: string
-          nullable: true
-        policy_id:
-          type: string
-          format: uuid
-          nullable: true
-        is_active:
-          type: boolean
+    PolicyResponse:
+      type: object
+      required:
+      - id
+      - name
+      - strategy
+      - constraints
+      - version
+      - created_at
+      - updated_at
+      properties:
+        constraints: {}
         created_at:
           type: string
-          format: date-time
-        last_used_at:
-          type: string
-          format: date-time
-          nullable: true
-        expires_at:
-          type: string
-          format: date-time
-          nullable: true
-
-    CreateApiKeyRequest:
-      type: object
-      properties:
-        name:
-          type: string
-        policy_id:
-          type: string
-          format: uuid
-        expires_at:
-          type: string
-          format: date-time
-
-    CreateApiKeyResponse:
-      allOf:
-        - $ref: '#/components/schemas/ApiKey'
-        - type: object
-          properties:
-            key:
-              type: string
-              description: Full API key — shown once only. Store it securely.
-              example: rtr-a1b2c3d4-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
-    Policy:
-      type: object
-      properties:
         id:
-          type: string
-          format: uuid
-        workspace_id:
           type: string
           format: uuid
         name:
           type: string
         strategy:
           type: string
-          enum: [cheapest, balanced, fastest]
-        constraints:
-          $ref: '#/components/schemas/PolicyConstraints'
+        updated_at:
+          type: string
         version:
           type: integer
-        created_at:
-          type: string
-          format: date-time
-
-    PolicyConstraints:
+          format: int32
+    RequestLogEntry:
       type: object
+      required:
+      - id
+      - model
+      - provider
+      - strategy
+      - cost_usd
+      - created_at
       properties:
-        allowed_providers:
-          type: array
-          items:
-            type: string
-          example: [groq, together]
-        allowed_regions:
-          type: array
-          items:
-            type: string
-          example: [eu-west, eu-central]
-        min_uptime_pct:
-          type: number
-          format: double
-          minimum: 0
-          maximum: 100
-        max_latency_ms:
-          type: integer
-          minimum: 0
-        max_cost_per_1m_tokens:
-          type: number
-          format: double
-        spend_cap_per_month_usd:
-          type: number
-          format: double
-        batch_mode:
-          type: boolean
-          default: false
-
-    BatchJob:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum: [queued, running, complete, failed]
-        request_count:
-          type: integer
-        completed_count:
-          type: integer
         cost_usd:
           type: number
           format: double
-          nullable: true
         created_at:
           type: string
-          format: date-time
-        completed_at:
+        error_code:
+          type:
+          - string
+          - 'null'
+        id:
           type: string
-          format: date-time
-          nullable: true
-
-    Error:
+        input_tokens:
+          type:
+          - integer
+          - 'null'
+          format: int32
+        latency_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+        model:
+          type: string
+        output_tokens:
+          type:
+          - integer
+          - 'null'
+          format: int32
+        provider:
+          type: string
+        status_code:
+          type:
+          - integer
+          - 'null'
+          format: int32
+        strategy:
+          type: string
+    TopupRequest:
       type: object
-      required: [error]
+      required:
+      - amount_usd
+      - customer_email
+      - success_url
       properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code:
-              type: string
-              example: no_provider_available
-            message:
-              type: string
-
-paths:
-  # ── Proxy (OpenAI-compatible) ────────────────────────────────────────────────
-  /chat/completions:
-    post:
-      operationId: createChatCompletion
-      summary: Create a chat completion
-      description: |
-        OpenAI-compatible chat completion endpoint.
-        Pass X-Routra-Policy header to control routing.
-      tags: [proxy]
-      parameters:
-        - name: X-Routra-Policy
-          in: header
-          required: false
-          schema:
+        amount_usd:
+          type: number
+          format: double
+          description: Amount in USD to add (between $1 and $500).
+        customer_email:
+          type: string
+        success_url:
+          type: string
+    UsageSummary:
+      type: object
+      required:
+      - total_requests
+      - total_input_tokens
+      - total_output_tokens
+      - total_cost_usd
+      - period
+      properties:
+        period:
+          type: string
+          description: Current billing period, e.g. "2026-04".
+        total_cost_usd:
+          type: number
+          format: double
+        total_input_tokens:
+          type: integer
+          format: int64
+        total_output_tokens:
+          type: integer
+          format: int64
+        total_requests:
+          type: integer
+          format: int64
+    WebhookEndpointResponse:
+      type: object
+      required:
+      - id
+      - url
+      - events
+      - is_active
+      - created_at
+      properties:
+        created_at:
+          type: string
+        events:
+          type: array
+          items:
             type: string
-          description: Name of routing policy to apply
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: OpenAI ChatCompletionRequest — use "auto" for model to let Routra choose.
-      responses:
-        "200":
-          description: Chat completion response with routra metadata field
-          content:
-            application/json:
-              schema:
-                type: object
-                description: OpenAI ChatCompletion response with extra `routra` field
-                properties:
-                  routra:
-                    $ref: '#/components/schemas/RoutingMetadata'
-        "429":
-          description: Rate limit or spend cap exceeded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        "503":
-          description: No provider available
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /models:
-    get:
-      operationId: listModels
-      summary: List available models
-      tags: [proxy]
-      responses:
-        "200":
-          description: OpenAI-compatible model list
-
-  # ── Keys ─────────────────────────────────────────────────────────────────────
-  /keys:
-    get:
-      operationId: listApiKeys
-      summary: List API keys
-      tags: [keys]
-      responses:
-        "200":
-          description: List of API keys (prefix and metadata only — never the full key)
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ApiKey'
-    post:
-      operationId: createApiKey
-      summary: Create an API key
-      description: Returns the full key once — store it immediately.
-      tags: [keys]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateApiKeyRequest'
-      responses:
-        "201":
-          description: Created key with full secret (shown once)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateApiKeyResponse'
-
-  /keys/{id}:
-    delete:
-      operationId: revokeApiKey
-      summary: Revoke an API key
-      tags: [keys]
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "204":
-          description: Key revoked
-
-  /keys/{id}/rotate:
-    post:
-      operationId: rotateApiKey
-      summary: Rotate an API key
-      description: Issues a new key. Old key remains active for 24 hours.
-      tags: [keys]
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "201":
-          description: New key (shown once)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateApiKeyResponse'
-
-  # ── Policies ─────────────────────────────────────────────────────────────────
-  /policies:
-    post:
-      operationId: createOrUpdatePolicy
-      summary: Create or update a routing policy
-      tags: [policies]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Policy'
-      responses:
-        "200":
-          description: Policy created or updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Policy'
-
-  # ── Usage ─────────────────────────────────────────────────────────────────────
-  /usage:
-    get:
-      operationId: getUsage
-      summary: Get usage and cost summary
-      tags: [usage]
-      parameters:
-        - name: days
-          in: query
-          schema:
-            type: integer
-            default: 30
-        - name: group_by
-          in: query
-          schema:
-            type: string
-            enum: [provider, model, key]
-      responses:
-        "200":
-          description: Usage summary
-
-  # ── Batch ─────────────────────────────────────────────────────────────────────
-  /batch:
-    post:
-      operationId: createBatchJob
-      summary: Create an async batch inference job
-      description: |
-        Submit a JSONL file of requests. Results delivered to Supabase Storage
-        and available via a signed URL. 50-60% cheaper than synchronous requests.
-      tags: [batch]
-      responses:
-        "202":
-          description: Batch job accepted
-          headers:
-            Location:
-              schema:
-                type: string
-              description: URL to poll for status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BatchJob'
-
-  /batch/{id}/status:
-    get:
-      operationId: getBatchStatus
-      summary: Get batch job status
-      tags: [batch]
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Batch job status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BatchJob'
-
-  /batch/{id}/results:
-    get:
-      operationId: getBatchResults
-      summary: Get batch results download URL
-      tags: [batch]
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Signed URL to download results JSONL (1 hour TTL)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  url:
-                    type: string
-                    format: uri
-                  expires_at:
-                    type: string
-                    format: date-time
-
-  # ── Health ────────────────────────────────────────────────────────────────────
-  /healthz:
-    get:
-      operationId: healthCheck
-      summary: Health check
-      tags: [system]
-      security: []
-      responses:
-        "200":
-          description: Service is healthy
+        id:
+          type: string
+        is_active:
+          type: boolean
+        url:
+          type: string
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Routra-Key
+tags:
+- name: proxy
+  description: AI proxy — chat completions, embeddings, models
+- name: keys
+  description: API key management
+- name: policies
+  description: Routing policy management
+- name: usage
+  description: Usage statistics and cost breakdown
+- name: billing
+  description: Billing, subscriptions & credits
+- name: batch
+  description: Batch job management
+- name: webhooks
+  description: Webhook endpoint management
+- name: health
+  description: Health check
+- name: audit
+  description: Audit log
