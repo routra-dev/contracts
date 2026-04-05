@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="200" height="200">
+  <defs><linearGradient id="lmg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#00D4E8"/><stop offset="100%" stop-color="#F5A020"/></linearGradient></defs>
+  <rect width="48" height="48" rx="38" fill="#020408"/>
+  <!-- 3 provider input nodes -->
+  <circle cx="8" cy="14" r="3.5" fill="#00D4E8" opacity=".85"/>
+  <circle cx="8" cy="24" r="3.5" fill="#00D4E8"/>
+  <circle cx="8" cy="34" r="3.5" fill="#00D4E8" opacity=".7"/>
+  <!-- Curved traces to hub -->
+  <path d="M11.5 14 Q24 14 24 24" stroke="url(#lmg)" stroke-width="1.8" fill="none" opacity=".65"/>
+  <path d="M11.5 24 L18.5 24"    stroke="url(#lmg)" stroke-width="2"   fill="none"/>
+  <path d="M11.5 34 Q24 34 24 24" stroke="url(#lmg)" stroke-width="1.8" fill="none" opacity=".65"/>
+  <!-- Hub (router circle) -->
+  <circle cx="24" cy="24" r="5.5" fill="#04080F" stroke="url(#lmg)" stroke-width="2"/>
+  <!-- Output line + amber arrowhead -->
+  <path d="M29.5 24 L40 24"         stroke="url(#lmg)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M36 19.5 L41 24 L36 28.5" stroke="#F5A020" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

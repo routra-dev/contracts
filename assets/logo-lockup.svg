@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 64" width="220" height="64">
+  <defs><linearGradient id="lkg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#00D4E8"/><stop offset="100%" stop-color="#F5A020"/></linearGradient></defs>
+  <!-- Routing mark (scaled 48→height) -->
+  <rect width="64" height="64" rx="12" fill="#020408"/>
+  <circle cx="10.666666666666666" cy="18.666666666666668" r="4.666666666666667" fill="#00D4E8" opacity=".85"/>
+  <circle cx="10.666666666666666" cy="32" r="4.666666666666667" fill="#00D4E8"/>
+  <circle cx="10.666666666666666" cy="45.333333333333336" r="4.666666666666667" fill="#00D4E8" opacity=".7"/>
+  <path d="M15.333333333333334 18.666666666666668 Q32 18.666666666666668 32 32" stroke="url(#lkg)" stroke-width="2.4" fill="none" opacity=".65"/>
+  <path d="M15.333333333333334 32 L24.666666666666668 32" stroke="url(#lkg)" stroke-width="2.6666666666666665" fill="none"/>
+  <path d="M15.333333333333334 45.333333333333336 Q32 45.333333333333336 32 32" stroke="url(#lkg)" stroke-width="2.4" fill="none" opacity=".65"/>
+  <circle cx="32" cy="32" r="7.333333333333333" fill="#04080F" stroke="url(#lkg)" stroke-width="2.6666666666666665"/>
+  <path d="M39.333333333333336 32 L53.333333333333336 32" stroke="url(#lkg)" stroke-width="3.3333333333333335" stroke-linecap="round"/>
+  <path d="M48 26 L54.666666666666664 32 L48 38" stroke="#F5A020" stroke-width="3.3333333333333335" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Wordmark: "rou" cyan, "tra" text -->
+  <text x="86" y="43" font-family="'Space Mono','Courier New',monospace" font-weight="700" font-size="32" letter-spacing="-0.5" fill="#00D4E8">rou</text>
+  <text x="148" y="43" font-family="'Space Mono','Courier New',monospace" font-weight="700" font-size="32" letter-spacing="-0.5" fill="#ecf4ff">tra</text>
+</svg>
