@@ -658,7 +658,7 @@ components:
           type:
           - string
           - 'null'
-          description: Active subscription ID (provider-agnostic name for public API).
+          description: Active subscription ID (provider-agnostic external ID).
         subscription_status:
           type: string
     CostBreakdownItem:
