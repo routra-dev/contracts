@@ -18,6 +18,22 @@ paths:
       responses:
         '200':
           description: Service is healthy
+  /public/models:
+    get:
+      tags:
+      - public
+      summary: Public model catalog with pricing (no auth)
+      description: |-
+        Returns every model in the catalog with per-provider pricing and the cheapest
+        option highlighted. Used by the public `/models` discovery page on the website.
+      operationId: public_model_catalog
+      responses:
+        '200':
+          description: Model catalog with pricing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicCatalogResponse'
   /v1/audit-log:
     get:
       tags:
@@ -387,6 +403,21 @@ paths:
           description: List of available models (OpenAI-compatible format)
       security:
       - ApiKeyAuth: []
+  /v1/models/catalog:
+    get:
+      tags:
+      - providers
+      summary: Full model catalog with per-provider pricing
+      operationId: model_catalog
+      responses:
+        '200':
+          description: Model catalog with pricing matrix
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelCatalogResponse'
+      security:
+      - ApiKeyAuth: []
   /v1/policies:
     get:
       tags:
@@ -424,6 +455,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PolicyResponse'
+        '500':
+          description: Internal error
+      security:
+      - ApiKeyAuth: []
+  /v1/providers:
+    get:
+      tags:
+      - providers
+      summary: List providers with health and metrics
+      operationId: list_providers
+      responses:
+        '200':
+          description: Provider list with health info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvidersResponse'
         '500':
           description: Internal error
       security:
@@ -661,6 +709,51 @@ components:
           description: Active subscription ID (provider-agnostic external ID).
         subscription_status:
           type: string
+    CatalogModelEntry:
+      type: object
+      required:
+      - id
+      - owned_by
+      - class
+      - providers
+      properties:
+        class:
+          type: string
+        id:
+          type: string
+        owned_by:
+          type: string
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogModelProvider'
+    CatalogModelProvider:
+      type: object
+      required:
+      - slug
+      - input_per_1m
+      - output_per_1m
+      - is_active
+      - health
+      properties:
+        health:
+          $ref: '#/components/schemas/HealthStatus'
+        input_per_1m:
+          type: number
+          format: double
+        is_active:
+          type: boolean
+        output_per_1m:
+          type: number
+          format: double
+        slug:
+          type: string
+    CircuitState:
+      type: string
+      enum:
+      - closed
+      - half_open
+      - open
     CostBreakdownItem:
       type: object
       required:
@@ -788,6 +881,13 @@ components:
           format: double
         granted:
           type: boolean
+    HealthStatus:
+      type: string
+      enum:
+      - healthy
+      - degraded
+      - down
+      - unknown
     KeySummary:
       type: object
       required:
@@ -818,6 +918,18 @@ components:
           format: uuid
         prefix:
           type: string
+    ModelCatalogResponse:
+      type: object
+      required:
+      - version
+      - models
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogModelEntry'
+        version:
+          type: string
     PolicyResponse:
       type: object
       required:
@@ -844,6 +956,132 @@ components:
         version:
           type: integer
           format: int32
+    ProviderInfo:
+      type: object
+      required:
+      - slug
+      - display_name
+      - tier
+      - is_active
+      - health
+      - circuit_state
+      - models_served
+      - has_api_key
+      properties:
+        circuit_state:
+          $ref: '#/components/schemas/CircuitState'
+        display_name:
+          type: string
+        has_api_key:
+          type: boolean
+          description: Whether the server has an API key configured for this provider.
+        health:
+          $ref: '#/components/schemas/HealthStatus'
+        is_active:
+          type: boolean
+        last_checked_at:
+          type:
+          - string
+          - 'null'
+        latency_p50_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+        models_served:
+          type: integer
+          format: int64
+        queue_depth:
+          type:
+          - integer
+          - 'null'
+          format: int32
+        slug:
+          type: string
+        tier:
+          type: string
+        uptime_pct_90d:
+          type:
+          - number
+          - 'null'
+          format: double
+    ProvidersResponse:
+      type: object
+      required:
+      - providers
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderInfo'
+    PublicCatalogResponse:
+      type: object
+      required:
+      - version
+      - updated
+      - models
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicModelEntry'
+        updated:
+          type: string
+        version:
+          type: string
+    PublicModelEntry:
+      type: object
+      required:
+      - id
+      - owned_by
+      - class
+      - providers
+      properties:
+        cheapest_input_per_1m:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Cheapest input price across all active providers (per 1M tokens).
+        cheapest_output_per_1m:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Cheapest output price across all active providers (per 1M tokens).
+        cheapest_provider:
+          type:
+          - string
+          - 'null'
+          description: Slug of the cheapest provider for this model.
+        class:
+          type: string
+        id:
+          type: string
+        owned_by:
+          type: string
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicModelProvider'
+    PublicModelProvider:
+      type: object
+      required:
+      - slug
+      - display_name
+      - input_per_1m
+      - output_per_1m
+      properties:
+        display_name:
+          type: string
+        input_per_1m:
+          type: number
+          format: double
+        output_per_1m:
+          type: number
+          format: double
+        slug:
+          type: string
     RequestLogEntry:
       type: object
       required:
@@ -975,3 +1213,7 @@ tags:
   description: Health check
 - name: audit
   description: Audit log
+- name: providers
+  description: Provider management and model catalog
+- name: public
+  description: Public endpoints (no auth required)
