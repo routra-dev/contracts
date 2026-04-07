@@ -205,23 +205,6 @@ paths:
           description: Payment adapter not configured
       security:
       - ApiKeyAuth: []
-  /v1/billing/free-credit:
-    post:
-      tags:
-      - billing
-      summary: Grant the one-time $5 free credit to a Starter workspace (idempotent)
-      operationId: grant_free_credit
-      responses:
-        '200':
-          description: Credit grant result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FreeCreditResponse'
-        '500':
-          description: Internal error
-      security:
-      - ApiKeyAuth: []
   /v1/billing/subscription:
     delete:
       tags:
@@ -698,7 +681,7 @@ components:
           description: Current prepaid credit balance (USD). Relevant for Starter/free workspaces.
         free_credit_granted:
           type: boolean
-          description: Whether the one-time $5 free credit has been issued to this workspace.
+          description: Whether the one-time $2 free credit has been issued to this workspace.
         spend_month_usd:
           type: number
           format: double
@@ -870,17 +853,6 @@ components:
         url:
           type: string
           description: HTTPS URL to deliver webhook events to.
-    FreeCreditResponse:
-      type: object
-      required:
-      - granted
-      - credit_balance_usd
-      properties:
-        credit_balance_usd:
-          type: number
-          format: double
-        granted:
-          type: boolean
     HealthStatus:
       type: string
       enum:
