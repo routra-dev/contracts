@@ -1,13 +1,13 @@
 # routra/contracts
 
-Shared API contracts for Routra — OpenAPI spec, routing policy schema, and proto definitions.
+Shared API contracts for Routra - OpenAPI spec, routing policy schema, and proto definitions.
 
 This is the **single source of truth** for all client codegen. Changes here trigger automated PRs in SDK repos.
 
 ## Contents
 
 ```
-openapi/routra.yaml       OpenAPI 3.1 spec — all proxy + admin API endpoints
+openapi/routra.yaml       OpenAPI 3.1 spec - all proxy + admin API endpoints
 policy/schema.json        JSON Schema for routra.yaml routing policy files
 policy/examples/          Example policies: cheapest, balanced, gdpr-eu, dpdp-india, batch
 proto/                    gRPC proto definitions (future internal service split)

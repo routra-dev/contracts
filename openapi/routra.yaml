@@ -307,7 +307,7 @@ paths:
       tags:
       - keys
       summary: List API keys
-      description: Returns prefix and metadata only — never the full key.
+      description: Returns prefix and metadata only - never the full key.
       operationId: list_keys
       responses:
         '200':
@@ -326,7 +326,7 @@ paths:
       tags:
       - keys
       summary: Create an API key
-      description: Returns the full key exactly once — store it immediately.
+      description: Returns the full key exactly once - store it immediately.
       operationId: create
       requestBody:
         content:
@@ -667,7 +667,7 @@ components:
           description: 'Job status: queued, running, complete, or failed.'
     BatchRequestItem:
       type: object
-      description: A batch request item — mirrors OpenAI's batch API format.
+      description: A batch request item - mirrors OpenAI's batch API format.
       required:
       - custom_id
       - method
@@ -833,7 +833,7 @@ components:
           format: uuid
         key:
           type: string
-          description: Full key — shown exactly once, never stored in plain text.
+          description: Full key - shown exactly once, never stored in plain text.
         name:
           type:
           - string
@@ -1196,7 +1196,7 @@ components:
       name: X-Routra-Key
 tags:
 - name: proxy
-  description: AI proxy — chat completions, embeddings, models
+  description: AI proxy - chat completions, embeddings, models
 - name: keys
   description: API key management
 - name: policies
