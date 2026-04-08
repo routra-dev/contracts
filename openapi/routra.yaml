@@ -116,6 +116,30 @@ paths:
           description: Internal error
       security:
       - ApiKeyAuth: []
+  /v1/batch/{id}/cancel:
+    post:
+      tags:
+      - batch
+      summary: Cancel a batch job
+      description: Cancels a queued or processing batch job. Already completed or failed jobs cannot be cancelled.
+      operationId: cancel
+      parameters:
+      - name: id
+        in: path
+        description: Batch job ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Job cancelled
+        '404':
+          description: Job not found
+        '409':
+          description: Job already in terminal state
+      security:
+      - ApiKeyAuth: []
   /v1/batch/{id}/results:
     get:
       tags:
@@ -401,6 +425,113 @@ paths:
                 $ref: '#/components/schemas/ModelCatalogResponse'
       security:
       - ApiKeyAuth: []
+  /v1/notifications/inbox:
+    get:
+      tags:
+      - notifications
+      summary: List in-app notifications
+      operationId: list_inbox
+      parameters:
+      - name: limit
+        in: query
+        description: Max items to return (default 50)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Inbox items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InboxItemResponse'
+      security:
+      - ApiKeyAuth: []
+  /v1/notifications/inbox/read-all:
+    post:
+      tags:
+      - notifications
+      summary: Mark all notifications as read
+      operationId: mark_all_read
+      responses:
+        '200':
+          description: All marked as read
+      security:
+      - ApiKeyAuth: []
+  /v1/notifications/inbox/unread-count:
+    get:
+      tags:
+      - notifications
+      summary: Get unread notification count
+      operationId: unread_count
+      responses:
+        '200':
+          description: Unread count
+      security:
+      - ApiKeyAuth: []
+  /v1/notifications/inbox/{id}/read:
+    post:
+      tags:
+      - notifications
+      summary: Mark a notification as read
+      operationId: mark_read
+      parameters:
+      - name: id
+        in: path
+        description: Notification ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Marked as read
+        '404':
+          description: Not found
+      security:
+      - ApiKeyAuth: []
+  /v1/notifications/preferences:
+    get:
+      tags:
+      - notifications
+      summary: List notification preferences
+      operationId: list_preferences
+      responses:
+        '200':
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationPreferenceResponse'
+      security:
+      - ApiKeyAuth: []
+    put:
+      tags:
+      - notifications
+      summary: Update notification preference for an event type
+      operationId: update_preference
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferenceRequest'
+        required: true
+      responses:
+        '200':
+          description: Preference updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferenceResponse'
+        '400':
+          description: Invalid request
+      security:
+      - ApiKeyAuth: []
   /v1/policies:
     get:
       tags:
@@ -442,6 +573,84 @@ paths:
           description: Internal error
       security:
       - ApiKeyAuth: []
+  /v1/provider-keys:
+    get:
+      tags:
+      - byok
+      summary: List stored provider keys (BYOK)
+      operationId: list_keys
+      responses:
+        '200':
+          description: List of stored provider key summaries
+      security:
+      - ApiKeyAuth: []
+      - ClerkJwt: []
+    post:
+      tags:
+      - byok
+      summary: Store a provider API key (BYOK)
+      operationId: store_key
+      requestBody:
+        description: Provider slug and API key
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreKeyRequest'
+        required: true
+      responses:
+        '200':
+          description: Key stored successfully
+        '400':
+          description: Invalid provider slug or empty key
+        '503':
+          description: BYOK not configured
+      security:
+      - ApiKeyAuth: []
+      - ClerkJwt: []
+  /v1/provider-keys/{provider_slug}:
+    delete:
+      tags:
+      - byok
+      summary: Remove a stored provider key (BYOK)
+      operationId: delete_key
+      parameters:
+      - name: provider_slug
+        in: path
+        description: Provider slug to remove key for
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Key removed
+        '404':
+          description: No key found for this provider
+      security:
+      - ApiKeyAuth: []
+      - ClerkJwt: []
+  /v1/provider-keys/{provider_slug}/verify:
+    post:
+      tags:
+      - byok
+      summary: Verify a stored provider key works (BYOK)
+      operationId: verify_key
+      parameters:
+      - name: provider_slug
+        in: path
+        description: Provider slug to verify
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Verification result
+        '404':
+          description: No key found for this provider
+        '503':
+          description: BYOK not configured
+      security:
+      - ApiKeyAuth: []
+      - ClerkJwt: []
   /v1/providers:
     get:
       tags:
@@ -639,15 +848,27 @@ components:
           format: double
         created_at:
           type: string
+        deadline_at:
+          type:
+          - string
+          - 'null'
+        error_message:
+          type:
+          - string
+          - 'null'
         id:
           type: string
           format: uuid
+        policy_name:
+          type:
+          - string
+          - 'null'
         request_count:
           type: integer
           format: int32
         status:
           type: string
-          description: 'Job status: queued, running, complete, or failed.'
+          description: 'Job status: queued, processing, complete, failed, or cancelled.'
     BatchRequestItem:
       type: object
       description: A batch request item - mirrors OpenAI's batch API format.
@@ -763,6 +984,11 @@ components:
         completion_window:
           type: string
           example: 24h
+        policy_name:
+          type:
+          - string
+          - 'null'
+          description: Optional policy name to use for routing (references a saved policy).
         requests:
           type: array
           items:
@@ -771,14 +997,17 @@ components:
     CreateCheckoutRequest:
       type: object
       required:
-      - product_id
+      - plan
       - customer_email
       - success_url
       properties:
         customer_email:
           type: string
-        product_id:
+        plan:
           type: string
+          description: |-
+            Target plan: `"pro"` or `"scale"`. The backend resolves the correct
+            payment provider product ID from server-side configuration.
         success_url:
           type: string
     CreateCheckoutResponse:
@@ -860,6 +1089,29 @@ components:
       - degraded
       - down
       - unknown
+    InboxItemResponse:
+      type: object
+      required:
+      - id
+      - event_type
+      - title
+      - body
+      - is_read
+      - created_at
+      properties:
+        body:
+          type: string
+        created_at:
+          type: string
+        event_type:
+          type: string
+        id:
+          type: string
+          format: uuid
+        is_read:
+          type: boolean
+        title:
+          type: string
     KeySummary:
       type: object
       required:
@@ -902,6 +1154,19 @@ components:
             $ref: '#/components/schemas/CatalogModelEntry'
         version:
           type: string
+    NotificationPreferenceResponse:
+      type: object
+      required:
+      - event_type
+      - email_enabled
+      - in_app_enabled
+      properties:
+        email_enabled:
+          type: boolean
+        event_type:
+          type: string
+        in_app_enabled:
+          type: boolean
     PolicyResponse:
       type: object
       required:
@@ -1101,6 +1366,18 @@ components:
           format: int32
         strategy:
           type: string
+    StoreKeyRequest:
+      type: object
+      required:
+      - provider_slug
+      - api_key
+      properties:
+        api_key:
+          type: string
+          description: The provider API key in plaintext. Encrypted before storage.
+        provider_slug:
+          type: string
+          description: Provider slug (e.g. "openai", "anthropic", "groq")
     TopupRequest:
       type: object
       required:
@@ -1111,11 +1388,24 @@ components:
         amount_usd:
           type: number
           format: double
-          description: Amount in USD to add (between $1 and $500).
+          description: Amount in USD to add (between $5 and $500).
         customer_email:
           type: string
         success_url:
           type: string
+    UpdatePreferenceRequest:
+      type: object
+      required:
+      - event_type
+      - email_enabled
+      - in_app_enabled
+      properties:
+        email_enabled:
+          type: boolean
+        event_type:
+          type: string
+        in_app_enabled:
+          type: boolean
     UsageSummary:
       type: object
       required:
@@ -1181,6 +1471,10 @@ tags:
   description: Batch job management
 - name: webhooks
   description: Webhook endpoint management
+- name: byok
+  description: Bring Your Own Key - customer provider key management
+- name: notifications
+  description: Notification preferences and inbox
 - name: health
   description: Health check
 - name: audit
