@@ -34,6 +34,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicCatalogResponse'
+  /v1/audio/speech:
+    post:
+      tags:
+      - proxy
+      summary: Text-to-speech (proxied)
+      operationId: speech
+      requestBody:
+        description: OpenAI-compatible TTS body
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '200':
+          description: Audio stream (binary)
+        '400':
+          description: Bad request
+        '503':
+          description: No providers available
+      security:
+      - ApiKeyAuth: []
+  /v1/audio/transcriptions:
+    post:
+      tags:
+      - proxy
+      summary: Speech-to-text transcription (proxied)
+      description: |-
+        Note: STT requests use `multipart/form-data` - the proxy forwards the raw body
+        bytes transparently, preserving the content-type header.
+      operationId: transcriptions
+      requestBody:
+        description: OpenAI-compatible transcription body (multipart/form-data)
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '200':
+          description: Transcription result
+        '400':
+          description: Bad request
+        '503':
+          description: No providers available
+      security:
+      - ApiKeyAuth: []
   /v1/audit-log:
     get:
       tags:
@@ -305,6 +350,27 @@ paths:
       responses:
         '200':
           description: Provider response
+        '503':
+          description: No providers available
+      security:
+      - ApiKeyAuth: []
+  /v1/images/generations:
+    post:
+      tags:
+      - proxy
+      summary: Image generation (proxied)
+      operationId: generations
+      requestBody:
+        description: OpenAI-compatible image generation body
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '200':
+          description: Provider response with generated image(s)
+        '400':
+          description: Bad request
         '503':
           description: No providers available
       security:
@@ -918,40 +984,61 @@ components:
       required:
       - id
       - owned_by
-      - class
+      - tier
+      - model_type
+      - capabilities
       - providers
       properties:
-        class:
-          type: string
+        capabilities: {}
         id:
+          type: string
+        model_type:
           type: string
         owned_by:
           type: string
+        param_count_b:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
         providers:
           type: array
           items:
             $ref: '#/components/schemas/CatalogModelProvider'
+        tier:
+          type: string
     CatalogModelProvider:
       type: object
       required:
       - slug
-      - input_per_1m
-      - output_per_1m
+      - pricing_unit
       - is_active
       - health
       properties:
         health:
           $ref: '#/components/schemas/HealthStatus'
         input_per_1m:
-          type: number
+          type:
+          - number
+          - 'null'
           format: double
         is_active:
           type: boolean
         output_per_1m:
-          type: number
+          type:
+          - number
+          - 'null'
           format: double
+        pricing_unit:
+          type: string
         slug:
           type: string
+        unit_price:
+          type:
+          - number
+          - 'null'
+          format: double
     CircuitState:
       type: string
       enum:
@@ -1003,6 +1090,13 @@ components:
       properties:
         customer_email:
           type: string
+        customer_name:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Customer display name forwarded to Dodo Payments. Optional - falls back
+            to the username prefix of `customer_email` when absent.
         plan:
           type: string
           description: |-
@@ -1142,6 +1236,29 @@ components:
           format: uuid
         prefix:
           type: string
+    ModalityUsage:
+      type: object
+      required:
+      - usage_unit
+      - request_count
+      - total_cost_usd
+      - total_usage_value
+      properties:
+        request_count:
+          type: integer
+          format: int64
+        total_cost_usd:
+          type: number
+          format: double
+        total_usage_value:
+          type: number
+          format: double
+          description: |-
+            Total usage value in the unit (e.g. number of images, seconds of audio).
+            For token-based models this is the sum of input + output tokens.
+        usage_unit:
+          type: string
+          description: 'Usage unit: "tokens", "images", "characters", "seconds", "steps".'
     ModelCatalogResponse:
       type: object
       required:
@@ -1271,9 +1388,12 @@ components:
       required:
       - id
       - owned_by
-      - class
+      - tier
+      - model_type
+      - capabilities
       - providers
       properties:
+        capabilities: {}
         cheapest_input_per_1m:
           type:
           - number
@@ -1291,34 +1411,52 @@ components:
           - string
           - 'null'
           description: Slug of the cheapest provider for this model.
-        class:
-          type: string
         id:
+          type: string
+        model_type:
           type: string
         owned_by:
           type: string
+        param_count_b:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
         providers:
           type: array
           items:
             $ref: '#/components/schemas/PublicModelProvider'
+        tier:
+          type: string
     PublicModelProvider:
       type: object
       required:
       - slug
       - display_name
-      - input_per_1m
-      - output_per_1m
+      - pricing_unit
       properties:
         display_name:
           type: string
         input_per_1m:
-          type: number
+          type:
+          - number
+          - 'null'
           format: double
         output_per_1m:
-          type: number
+          type:
+          - number
+          - 'null'
           format: double
+        pricing_unit:
+          type: string
         slug:
           type: string
+        unit_price:
+          type:
+          - number
+          - 'null'
+          format: double
     RequestLogEntry:
       type: object
       required:
@@ -1366,6 +1504,17 @@ components:
           format: int32
         strategy:
           type: string
+        usage_unit:
+          type:
+          - string
+          - 'null'
+          description: 'Usage unit: "tokens", "images", "characters", "seconds", "steps".'
+        usage_value:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Usage value in the specified unit.
     StoreKeyRequest:
       type: object
       required:
@@ -1391,6 +1540,13 @@ components:
           description: Amount in USD to add (between $5 and $500).
         customer_email:
           type: string
+        customer_name:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Customer display name forwarded to Dodo Payments. Optional - falls back
+            to the username prefix of `customer_email` when absent.
         success_url:
           type: string
     UpdatePreferenceRequest:
@@ -1414,7 +1570,13 @@ components:
       - total_output_tokens
       - total_cost_usd
       - period
+      - modality_breakdown
       properties:
+        modality_breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModalityUsage'
+          description: Per-modality breakdown of usage for the current period.
         period:
           type: string
           description: Current billing period, e.g. "2026-04".
@@ -1458,7 +1620,7 @@ components:
       name: X-Routra-Key
 tags:
 - name: proxy
-  description: AI proxy - chat completions, embeddings, models
+  description: AI proxy - chat, embeddings, images, audio
 - name: keys
   description: API key management
 - name: policies
