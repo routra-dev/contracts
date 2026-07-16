@@ -203,6 +203,10 @@ paths:
       responses:
         '200':
           description: Results URL or current status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResultsResponse'
         '404':
           description: Job not found
       security:
@@ -839,6 +843,10 @@ paths:
       responses:
         '201':
           description: Webhook endpoint created (includes secret shown once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWebhookResponse'
         '400':
           description: Invalid URL or event type
       security:
@@ -951,6 +959,55 @@ components:
           type: string
         url:
           type: string
+    BatchResultsResponse:
+      type: object
+      description: |-
+        Documents every field the `/v1/batch/{id}/results` handler can emit. The
+        handler builds its response as a hand-assembled `json!()` object whose
+        exact shape depends on job status/storage outcome (not this struct
+        directly) - this exists only so the generated OpenAPI schema (and the
+        dashboard's Orval-generated TypeScript client) has a real, non-`void`
+        type for the response instead of an empty one.
+      required:
+      - job_id
+      - status
+      - completed_count
+      properties:
+        completed_count:
+          type: integer
+          format: int32
+        job_id:
+          type: string
+          format: uuid
+        request_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Only present while status != "complete".
+        results:
+          description: |-
+            Inline JSONL-equivalent results. Present when status="complete" and
+            the R2 upload failed at completion time (DB fallback path).
+        results_url:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Presigned R2 URL, valid for `results_url_expires_in_seconds`. Present
+            when status="complete" and results were uploaded to R2 (the common
+            case). Minted fresh on every request, not cached - poll this endpoint
+            again rather than reusing an old URL past its expiry.
+        results_url_expires_in_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Seconds until `results_url` expires. Always present alongside `results_url`.
+          minimum: 0
+        status:
+          type: string
+          description: 'Job status: queued, processing, complete, failed, or cancelled.'
     BillingInfo:
       type: object
       required:
@@ -1176,6 +1233,35 @@ components:
         url:
           type: string
           description: HTTPS URL to deliver webhook events to.
+    CreateWebhookResponse:
+      type: object
+      description: |-
+        Documents the response to POST /v1/webhooks (creation only). Not used for
+        list/get, which return `WebhookEndpointResponse` - `secret` is generated
+        once at creation and never retrievable again afterward.
+      required:
+      - id
+      - url
+      - events
+      - secret
+      - is_active
+      - created_at
+      properties:
+        created_at:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+        is_active:
+          type: boolean
+        secret:
+          type: string
+          description: Shown once, on creation only. Store it now - it cannot be retrieved again.
+        url:
+          type: string
     HealthStatus:
       type: string
       enum:
